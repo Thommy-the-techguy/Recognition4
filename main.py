@@ -32,7 +32,27 @@ def draw_graph(clusters_with_coordinates_dictionary_default, classes_to_numbers_
                         clusters_with_coordinates_dictionary_default[str([point])][1],
                         color=key,
                         marker="o")
+    colors_key_iterator = iter(colors_clusters_dict)
+    plus_coordinates = calculate_plus_centers(clusters_with_coordinates_final,
+                                              clusters_with_coordinates_dictionary_default)
+    for coordinates in plus_coordinates:
+        pyplot.plot(coordinates[0],
+                    coordinates[1],
+                    color=next(colors_key_iterator),
+                    marker="+")
     pyplot.show()
+
+
+def calculate_plus_centers(clusters_with_coordinates_final, clusters_with_coordinates_dictionary_default):
+    plus_coords = []
+    for key in clusters_with_coordinates_final:
+        ends_list = []
+        nodes_list = []
+        for value in ast.literal_eval(key):
+            ends_list.append(clusters_with_coordinates_dictionary_default[str([value])][0])
+            nodes_list.append(clusters_with_coordinates_dictionary_default[str([value])][1])
+        plus_coords.append(find_avg_parameters(ends_list, nodes_list))
+    return plus_coords
 
 
 def fill_numbers_in_excel(excel_file_name, column_name):
@@ -84,12 +104,13 @@ def find_min_distance_between_clusters(cluster_plus_coordinates_dict):
             current_coordinates = list(dict(cluster_plus_coordinates_dict)[key])
             # print(current_coordinates)
             distance = get_distance(coordinates, current_coordinates)
-            if current_coordinates != coordinates and distance < min_value and (comparable_key not in ignore_this_points and key not in ignore_this_points):
+            if current_coordinates != coordinates and distance < min_value and (
+                    comparable_key not in ignore_this_points and key not in ignore_this_points):
                 min_value = distance
                 cluster_from_to = (ast.literal_eval(comparable_key) + ast.literal_eval(key))
                 cluster_from = ast.literal_eval(comparable_key)
                 cluster_to = ast.literal_eval(key)
-                # print(f"cluster_from_to {cluster_from} {cluster_to}")
+                # print(f"cluster_from_to {cluster_from} {cluster_to} {min_value}")
                 coordinates_list = coordinates
                 current_coordinates_list = current_coordinates
         # print("\n")
@@ -169,6 +190,18 @@ def parse_classes_to_numbers(excel_file_name):
     return classes_to_numbers_list
 
 
+def fill_cluster_number_in_excel(excel_file_name, clusters_with_coordinates_dictionary):
+    file = read_excel(excel_file_name)
+    numbers = list(file["n"])
+    for cluster in dict(clusters_with_coordinates_dictionary).keys():
+        for number in numbers:
+            if number in ast.literal_eval(cluster):
+                file.at[file.index[number - 1], "cluster"] = (
+                        list(dict(clusters_with_coordinates_dictionary).keys()).index(str(cluster)) + 1
+                )
+    file.to_excel(excel_file_name, index=False)
+
+
 if __name__ == '__main__':
     ignore_this_points = []
 
@@ -187,9 +220,13 @@ if __name__ == '__main__':
     amount_of_points = len(clusters_w_coordinates_dict)
     if int(number_of_clusters) > amount_of_points:
         exit(1)
+    print(f"{len(clusters_w_coordinates_dict)} - {clusters_w_coordinates_dict}")
     for i in range(0, amount_of_points - int(number_of_clusters)):
         find_min_distance_between_clusters(clusters_w_coordinates_dict)
-    print(f"ignore this points: {ignore_this_points}")
-    print(f"clusters w coordinates: {clusters_w_coordinates_dict}")
-    print(f"default {clusters_w_coordinates_dict_default}")
+        print(f"{len(clusters_w_coordinates_dict)} - {clusters_w_coordinates_dict}")
+    # print(f"ignore this points: {ignore_this_points}")
+    # print(f"clusters w coordinates: {clusters_w_coordinates_dict}")
+    # print(f"default {clusters_w_coordinates_dict_default}")
     draw_graph(clusters_w_coordinates_dict_default, parse_classes_to_numbers("data.xlsx"), clusters_w_coordinates_dict)
+    calculate_plus_centers(clusters_w_coordinates_dict, clusters_w_coordinates_dict_default)
+    fill_cluster_number_in_excel("data.xlsx", clusters_w_coordinates_dict)

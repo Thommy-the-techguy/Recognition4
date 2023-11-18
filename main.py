@@ -1,3 +1,4 @@
+import ast
 import math
 import re
 import shutil
@@ -6,10 +7,32 @@ from pandas import read_excel
 from pandas import DataFrame
 from matplotlib import pyplot
 from PIL import Image
+from collections import OrderedDict
 
 
-def draw_graph():
-    pass
+def draw_graph(clusters_with_coordinates_dictionary_default, classes_to_numbers_list, clusters_with_coordinates_final):
+    data_dict = {"x": [], "y": []}
+    available_colors = ["blue", "green", "red", "cyan", "magenta",
+                        "yellow", "black", "#1E90FF", "#FFD700", "#FFA07A",
+                        "#00FF00", "#BA55D3", "#FF6347", "#8B008B", "#FFC0CB",
+                        "#FF69B4", "#00CED1", "#FF4500", "#9400D3", "#FF8C00"]
+    colors_clusters_dict = {}
+    for key in clusters_with_coordinates_dictionary_default:
+        data_dict["x"].append(clusters_with_coordinates_dictionary_default[key][0])
+        data_dict["y"].append(clusters_with_coordinates_dictionary_default[key][1])
+    color_counter = 0
+    for key in clusters_with_coordinates_final:
+        colors_clusters_dict[available_colors[color_counter]] = ast.literal_eval(key)
+        color_counter += 1
+    for i in range(0, len(data_dict["x"])):
+        pyplot.text(data_dict["x"][i], data_dict["y"][i], classes_to_numbers_list[i], ha="right", va="center")
+    for key in colors_clusters_dict:
+        for point in colors_clusters_dict[key]:
+            pyplot.plot(clusters_with_coordinates_dictionary_default[str([point])][0],
+                        clusters_with_coordinates_dictionary_default[str([point])][1],
+                        color=key,
+                        marker="o")
+    pyplot.show()
 
 
 def fill_numbers_in_excel(excel_file_name, column_name):
@@ -27,77 +50,103 @@ def read_parameters_from_excel(excel_file_name, parameters_list):
     return parameters_dictionary
 
 
-def calculate_distance_for_each_point(parameters_dictionary):
-    point_distance_dictionary = {}
-    print(parameters_dictionary)
-    for i in range(0, len(list(dict(parameters_dictionary).values())[0])):
-        current_point_end = list(dict(parameters_dictionary).values())[0][i]
-        current_point_node = list(dict(parameters_dictionary).values())[1][i]
-        print(f"current point end: {current_point_end}")
-        point_distance_dictionary[f"{i + 1}"] = []
-        for j in range(0, len(list(dict(parameters_dictionary).values())[0])):
-            next_point_end = list(dict(parameters_dictionary).values())[0][j]
-            next_point_node = list(dict(parameters_dictionary).values())[1][j]
-            # print(f"next point end: {next_point_end}")
-            point_distance_dictionary[f"{i + 1}"].append(math.sqrt(
-                    (float(current_point_end) - float(next_point_end)) ** 2
-                    + ((float(current_point_node) - float(next_point_node)) ** 2)
-                )
-            )
-            distance = math.sqrt(((float(current_point_end) - float(next_point_end)) ** 2) + (((float(current_point_node) - float(next_point_node)) ** 2)))
-            print(f"distance {distance} to point {next_point_end} {next_point_node}")
-    return point_distance_dictionary
+def parse_numbers_to_clusters(excel_file_name, name_of_the_n_column):
+    list_of_clusters = []
+    file = read_excel(excel_file_name)
+    for number in list(file[name_of_the_n_column]):
+        list_of_clusters.append([number])
+    return list_of_clusters
 
 
-def find_min_distance_in_dictionary(point_distance_dictionary):
-    min_value_dict = {}
+def get_cluster_plus_coordinates(list_of_clusters, parameters_dictionary):
+    cluster_plus_coordinates_dict = {}
+    for cluster, end, node in zip(list_of_clusters,
+                                  list(list(dict(parameters_dictionary).values())[0]),
+                                  list(list(dict(parameters_dictionary).values())[1])):
+        cluster_plus_coordinates_dict[str(cluster)] = [end, node]
+    return cluster_plus_coordinates_dict
+
+
+def find_min_distance_between_clusters(cluster_plus_coordinates_dict):
+    global ignore_this_points
     min_value = 9999
-    point_from = ""
-    point_to = ""
-    for i in range(0, len(point_distance_dictionary)):
-        current_dictionary = list(point_distance_dictionary.values())[i]
-        for j in range(0, len(current_dictionary)):
-            if current_dictionary[j] != 0 and current_dictionary[j] < min_value:
-                min_value = current_dictionary[j]
-                point_from = f"{i + 1}"
-                point_to = f"{j + 1}"
-    min_value_dict[point_from] = {}
-    min_value_dict[point_from][point_to] = min_value
+    cluster_from_to = []
+    cluster_from = []
+    cluster_to = []
+    coordinates_list = []
+    current_coordinates_list = []
+    for i in range(0, len(cluster_plus_coordinates_dict)):
+        comparable_key = list(dict(cluster_plus_coordinates_dict).keys())[i]
+        coordinates = list(dict(cluster_plus_coordinates_dict)[comparable_key])
+        # print(f"comparable key: {comparable_key}\ncoordinates: {coordinates}")
+        for j in range(0, len(cluster_plus_coordinates_dict)):
+            key = list(dict(cluster_plus_coordinates_dict).keys())[j]
+            current_coordinates = list(dict(cluster_plus_coordinates_dict)[key])
+            # print(current_coordinates)
+            distance = get_distance(coordinates, current_coordinates)
+            if current_coordinates != coordinates and distance < min_value and (comparable_key not in ignore_this_points and key not in ignore_this_points):
+                min_value = distance
+                cluster_from_to = (ast.literal_eval(comparable_key) + ast.literal_eval(key))
+                cluster_from = ast.literal_eval(comparable_key)
+                cluster_to = ast.literal_eval(key)
+                # print(f"cluster_from_to {cluster_from} {cluster_to}")
+                coordinates_list = coordinates
+                current_coordinates_list = current_coordinates
+        # print("\n")
+    add_new_cluster_to_dict(cluster_from_to, coordinates_list, current_coordinates_list)
+    add_to_ignore_list([cluster_from, cluster_to])
+    reconstruct_dict(str(cluster_from), str(cluster_from_to))
+    remove_not_merged([str(cluster_from), str(cluster_to)])
+    # print(ignore_this_points)
+    return cluster_from_to
 
-    # print(remove_min_value_connected_points_from_dict(point_distance_dictionary, point_from, point_to))
-    return min_value_dict
+
+def get_distance(coordinates_list, current_coordinates_list):
+    summary = 0
+    for i in range(0, len(coordinates_list)):
+        summary += (float(coordinates_list[i]) - float(current_coordinates_list[i])) ** 2
+    return math.sqrt(summary)
 
 
-def replace_in_parameters_dict(parameters_dict, min_value_dict):
-    global clusters
-    cluster = []
+def add_new_cluster_to_dict(cluster_from_to, coordinates_list, current_coordinates_list):
+    global clusters_w_coordinates_dict
+    clusters_w_coordinates_dict[str(cluster_from_to)] = find_avg_parameters(coordinates_list, current_coordinates_list)
 
-    point_from = list(dict(min_value_dict).keys())[0]
-    point_to = list(dict(list(dict(min_value_dict).values())[0]).keys())[0]
-    ends_list = list(list(dict(parameters_dict).values())[0])
-    nodes_list = list(list(dict(parameters_dict).values())[1])
 
-    cluster.append(point_from)
-    cluster.append(point_to)
-    clusters.append(cluster)
-    print(f"clusters: {clusters}")
+def add_to_ignore_list(cluster_from_to):
+    global ignore_this_points
+    for cluster in cluster_from_to:
+        # print(f"cluster: {cluster}")
+        if str(cluster) not in ignore_this_points:
+            ignore_this_points.append(str(cluster))
 
-    ends_list_for_avg, nodes_list_for_avg = [], []
-    ends_list_for_avg.append(ends_list.pop(int(point_from) - 1))
-    ends_list_for_avg.append(ends_list.pop(int(point_to) - 2))
-    nodes_list_for_avg.append(nodes_list.pop(int(point_from) - 1))
-    nodes_list_for_avg.append(nodes_list.pop(int(point_to) - 2))
 
-    print(ends_list_for_avg)
-    print(nodes_list_for_avg)
+def reconstruct_dict(comparable_key, cluster_from_to):
+    global clusters_w_coordinates_dict
+    keys_list, values_list = [], []
+    temp_dict = {}
+    for key in clusters_w_coordinates_dict:
+        keys_list.append(key)
+        values_list.append(clusters_w_coordinates_dict[key])
+    index_for_key = keys_list.index(comparable_key)
+    index_for_coords = 0
+    for key in keys_list:
+        if key == cluster_from_to:
+            index_for_coords = keys_list.index(key)
+            keys_list.remove(key)
+            keys_list.insert(index_for_key, key)
+            break
+    temp_values = values_list.pop(index_for_coords)
+    values_list.insert(index_for_key, temp_values)
+    for key, values in zip(keys_list, values_list):
+        temp_dict[key] = values
+    clusters_w_coordinates_dict = temp_dict
 
-    avg_values = find_avg_parameters(ends_list_for_avg, nodes_list_for_avg)
 
-    ends_list.insert(int(point_from) - 1, avg_values[0])
-    nodes_list.insert(int(point_from) - 1, avg_values[1])
-    parameters_dict["end"] = ends_list
-    parameters_dict["node"] = nodes_list
-    return parameters_dict
+def remove_not_merged(cluster_from_to):
+    global clusters_w_coordinates_dict
+    for cluster in cluster_from_to:
+        clusters_w_coordinates_dict.pop(cluster)
 
 
 def find_avg_parameters(ends_list_for_avg, nodes_list_for_avg):
@@ -106,29 +155,41 @@ def find_avg_parameters(ends_list_for_avg, nodes_list_for_avg):
     return avg_values
 
 
-# def get_euclidean_distance()
+def parse_classes_to_numbers(excel_file_name):
+    classes_to_numbers_list = []
+    file = read_excel(excel_file_name)
+    classes = list(file["class"])
+    for clazz in classes:
+        if clazz == "first":
+            classes_to_numbers_list.append("1")
+        elif clazz == "second":
+            classes_to_numbers_list.append("2")
+        elif clazz == "third":
+            classes_to_numbers_list.append("3")
+    return classes_to_numbers_list
 
 
 if __name__ == '__main__':
-    clusters = []
-    cluster_points = []
-    # excel_file = read_excel("data_images.xlsx")
-    # paths_list = list(excel_file["path"])
+    ignore_this_points = []
+
     fill_numbers_in_excel("data.xlsx", "end")
     fill_numbers_in_excel("data_images.xlsx", "z1")
 
     number_of_clusters = input("Input number of clusters: ")
-    parameters_dictionary = read_parameters_from_excel("data.xlsx", ["end", "node"])
-    distances_dictionary = {}
-    for i in range(0, int(number_of_clusters)):
-        # print(parameters_dictionary)
-        # print(read_parameters_from_excel("data_images.xlsx", ["z1", "z2", "z3"]))
-        # print(calculate_distance_for_each_point(parameters_dictionary))
-        distances_dictionary = calculate_distance_for_each_point(parameters_dictionary)
-        # print(find_min_distance_in_dictionary(distances))
-        # replace_min_value_connected_points_in_dict_with_avg(parameters_dictionary, distances, find_min_distance_in_dictionary(distances))
-        minimal_value_dictionary = find_min_distance_in_dictionary(distances_dictionary)
-        parameters_dictionary = replace_in_parameters_dict(parameters_dictionary, minimal_value_dictionary)
-    distances_dictionary = calculate_distance_for_each_point(parameters_dictionary)
-    print(f"distances_dictionary: {distances_dictionary}")
-    print(f"parameters_dictionary: {parameters_dictionary}")
+    clusters_w_coordinates_dict = get_cluster_plus_coordinates(
+        parse_numbers_to_clusters("data.xlsx", "n"),
+        read_parameters_from_excel("data.xlsx", ["end", "node"])
+    )
+    clusters_w_coordinates_dict_default = get_cluster_plus_coordinates(
+        parse_numbers_to_clusters("data.xlsx", "n"),
+        read_parameters_from_excel("data.xlsx", ["end", "node"])
+    )
+    amount_of_points = len(clusters_w_coordinates_dict)
+    if int(number_of_clusters) > amount_of_points:
+        exit(1)
+    for i in range(0, amount_of_points - int(number_of_clusters)):
+        find_min_distance_between_clusters(clusters_w_coordinates_dict)
+    print(f"ignore this points: {ignore_this_points}")
+    print(f"clusters w coordinates: {clusters_w_coordinates_dict}")
+    print(f"default {clusters_w_coordinates_dict_default}")
+    draw_graph(clusters_w_coordinates_dict_default, parse_classes_to_numbers("data.xlsx"), clusters_w_coordinates_dict)

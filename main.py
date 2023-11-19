@@ -10,7 +10,8 @@ from PIL import Image
 from collections import OrderedDict
 
 
-def draw_graph(clusters_with_coordinates_dictionary_default, classes_to_numbers_list, clusters_with_coordinates_final):
+def draw_graph_2d(clusters_with_coordinates_dictionary_default, classes_to_numbers_list,
+                  clusters_with_coordinates_final):
     data_dict = {"x": [], "y": []}
     available_colors = ["blue", "green", "red", "cyan", "magenta",
                         "yellow", "black", "#1E90FF", "#FFD700", "#FFA07A",
@@ -33,28 +34,61 @@ def draw_graph(clusters_with_coordinates_dictionary_default, classes_to_numbers_
                         color=key,
                         marker="o")
     colors_key_iterator = iter(colors_clusters_dict)
-    plus_coordinates = calculate_plus_centers(clusters_with_coordinates_final,
-                                              clusters_with_coordinates_dictionary_default)
-    for coordinates in plus_coordinates:
-        pyplot.plot(coordinates[0],
-                    coordinates[1],
+    for key in clusters_with_coordinates_final:
+        pyplot.plot(clusters_with_coordinates_final[key][0],
+                    clusters_with_coordinates_final[key][1],
                     color=next(colors_key_iterator),
                     marker="+")
     pyplot.show()
 
 
-def calculate_plus_centers(clusters_with_coordinates_final, clusters_with_coordinates_dictionary_default):
-    plus_coords = []
+def draw_graph_3d(clusters_with_coordinates_dictionary_default, classes_to_numbers_list,
+                  clusters_with_coordinates_final):
+    data_dict = {"x": [], "y": [], "z": []}
+    available_colors = ["blue", "green", "red", "cyan", "magenta",
+                        "yellow", "black", "#1E90FF", "#FFD700", "#FFA07A",
+                        "#00FF00", "#BA55D3", "#FF6347", "#8B008B", "#FFC0CB",
+                        "#FF69B4", "#00CED1", "#FF4500", "#9400D3", "#FF8C00"]
+    colors_clusters_dict = {}
+    for key in clusters_with_coordinates_dictionary_default:
+        data_dict["x"].append(clusters_with_coordinates_dictionary_default[key][0])
+        data_dict["y"].append(clusters_with_coordinates_dictionary_default[key][1])
+        data_dict["z"].append(clusters_with_coordinates_dictionary_default[key][2])
+    color_counter = 0
     for key in clusters_with_coordinates_final:
-        ends_list = []
-        nodes_list = []
-        for value in ast.literal_eval(key):
-            ends_list.append(clusters_with_coordinates_dictionary_default[str([value])][0])
-            nodes_list.append(clusters_with_coordinates_dictionary_default[str([value])][1])
-        plus_coords.append(find_avg_parameters(ends_list, nodes_list))
-    return plus_coords
+        colors_clusters_dict[available_colors[color_counter]] = ast.literal_eval(key)
+        color_counter += 1
+
+    fig = pyplot.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(data_dict["x"], data_dict["y"], data_dict["z"])
+    ax.set_xlabel('X Label')
+    ax.set_ylabel('Y Label')
+    ax.set_zlabel('Z Label')
+
+    for i in range(0, len(data_dict["x"])):
+        ax.text(data_dict["x"][i], data_dict["y"][i], data_dict["z"][i],
+                classes_to_numbers_list[i])
+    for key in colors_clusters_dict:
+        for point in colors_clusters_dict[key]:
+            pyplot.plot(clusters_with_coordinates_dictionary_default[str([point])][0],
+                        clusters_with_coordinates_dictionary_default[str([point])][1],
+                        clusters_with_coordinates_dictionary_default[str([point])][2],
+                        color=key,
+                        marker="o")
+    colors_key_iterator = iter(colors_clusters_dict)
+    for key in clusters_with_coordinates_final:
+        pyplot.plot(clusters_with_coordinates_final[key][0],
+                    clusters_with_coordinates_final[key][1],
+                    clusters_with_coordinates_final[key][2],
+                    color=next(colors_key_iterator),
+                    marker="+")
+
+    ax.view_init(elev=30, azim=270)
+    pyplot.show()
 
 
+# +
 def fill_numbers_in_excel(excel_file_name, column_name):
     file = read_excel(excel_file_name)
     for i in range(0, len(list(file[column_name]))):
@@ -62,6 +96,7 @@ def fill_numbers_in_excel(excel_file_name, column_name):
     file.to_excel(excel_file_name, index=False)
 
 
+# +
 def read_parameters_from_excel(excel_file_name, parameters_list):
     parameters_dictionary = {}
     file = read_excel(excel_file_name)
@@ -70,6 +105,7 @@ def read_parameters_from_excel(excel_file_name, parameters_list):
     return parameters_dictionary
 
 
+# +
 def parse_numbers_to_clusters(excel_file_name, name_of_the_n_column):
     list_of_clusters = []
     file = read_excel(excel_file_name)
@@ -78,15 +114,24 @@ def parse_numbers_to_clusters(excel_file_name, name_of_the_n_column):
     return list_of_clusters
 
 
+# +
 def get_cluster_plus_coordinates(list_of_clusters, parameters_dictionary):
     cluster_plus_coordinates_dict = {}
-    for cluster, end, node in zip(list_of_clusters,
-                                  list(list(dict(parameters_dictionary).values())[0]),
-                                  list(list(dict(parameters_dictionary).values())[1])):
-        cluster_plus_coordinates_dict[str(cluster)] = [end, node]
+    if len(parameters_dictionary) == 2:
+        for cluster, end, node in zip(list_of_clusters,
+                                      list(list(dict(parameters_dictionary).values())[0]),
+                                      list(list(dict(parameters_dictionary).values())[1])):
+            cluster_plus_coordinates_dict[str(cluster)] = [end, node]
+    elif len(parameters_dictionary) == 3:
+        for cluster, z1, z2, z3 in zip(list_of_clusters,
+                                       list(list(dict(parameters_dictionary).values())[0]),
+                                       list(list(dict(parameters_dictionary).values())[1]),
+                                       list(list(dict(parameters_dictionary).values())[2])):
+            cluster_plus_coordinates_dict[str(cluster)] = [z1, z2, z3]
     return cluster_plus_coordinates_dict
 
 
+# +
 def find_min_distance_between_clusters(cluster_plus_coordinates_dict):
     global ignore_this_points
     min_value = 9999
@@ -122,6 +167,7 @@ def find_min_distance_between_clusters(cluster_plus_coordinates_dict):
     return cluster_from_to
 
 
+# +
 def get_distance(coordinates_list, current_coordinates_list):
     summary = 0
     for i in range(0, len(coordinates_list)):
@@ -129,6 +175,7 @@ def get_distance(coordinates_list, current_coordinates_list):
     return math.sqrt(summary)
 
 
+# +
 def add_new_cluster_to_dict(cluster_from_to, coordinates_list, current_coordinates_list):
     global clusters_w_coordinates_dict
     clusters_w_coordinates_dict[str(cluster_from_to)] = find_avg_parameters(coordinates_list, current_coordinates_list)
@@ -170,10 +217,12 @@ def remove_not_merged(cluster_from_to):
         clusters_w_coordinates_dict.pop(cluster)
 
 
-def find_avg_parameters(ends_list_for_avg, nodes_list_for_avg):
-    avg_values = [sum(list(ends_list_for_avg)) / len(list(ends_list_for_avg)),
-                  sum(list(nodes_list_for_avg)) / len(list(nodes_list_for_avg))]
-    return avg_values
+# +
+def find_avg_parameters(coordinates_list, current_coordinates_list):
+    averages = []
+    for coord, cur_coord in zip(coordinates_list, current_coordinates_list):
+        averages.append((coord + cur_coord) / 2)
+    return averages
 
 
 def parse_classes_to_numbers(excel_file_name):
@@ -208,6 +257,7 @@ if __name__ == '__main__':
     fill_numbers_in_excel("data.xlsx", "end")
     fill_numbers_in_excel("data_images.xlsx", "z1")
 
+    # first part
     number_of_clusters = input("Input number of clusters: ")
     clusters_w_coordinates_dict = get_cluster_plus_coordinates(
         parse_numbers_to_clusters("data.xlsx", "n"),
@@ -227,6 +277,26 @@ if __name__ == '__main__':
     # print(f"ignore this points: {ignore_this_points}")
     # print(f"clusters w coordinates: {clusters_w_coordinates_dict}")
     # print(f"default {clusters_w_coordinates_dict_default}")
-    draw_graph(clusters_w_coordinates_dict_default, parse_classes_to_numbers("data.xlsx"), clusters_w_coordinates_dict)
-    calculate_plus_centers(clusters_w_coordinates_dict, clusters_w_coordinates_dict_default)
+    draw_graph_2d(clusters_w_coordinates_dict_default, parse_classes_to_numbers("data.xlsx"), clusters_w_coordinates_dict)
     fill_cluster_number_in_excel("data.xlsx", clusters_w_coordinates_dict)
+
+    # second part
+    number_of_clusters = input("Input number of clusters: ")
+    clusters_w_coordinates_dict = get_cluster_plus_coordinates(
+        parse_numbers_to_clusters("data_images.xlsx", "n"),
+        read_parameters_from_excel("data_images.xlsx", ["z1", "z2", "z3"])
+    )
+    clusters_w_coordinates_dict_default = get_cluster_plus_coordinates(
+        parse_numbers_to_clusters("data_images.xlsx", "n"),
+        read_parameters_from_excel("data_images.xlsx", ["z1", "z2", "z3"])
+    )
+    amount_of_points = len(clusters_w_coordinates_dict)
+    if int(number_of_clusters) > amount_of_points:
+        exit(1)
+    print(f"{len(clusters_w_coordinates_dict)} - {clusters_w_coordinates_dict}")
+    for i in range(0, amount_of_points - int(number_of_clusters)):
+        find_min_distance_between_clusters(clusters_w_coordinates_dict)
+        print(f"{len(clusters_w_coordinates_dict)} - {clusters_w_coordinates_dict}")
+    draw_graph_3d(clusters_w_coordinates_dict_default, parse_classes_to_numbers("data_images.xlsx"),
+                  clusters_w_coordinates_dict)
+    fill_cluster_number_in_excel("data_images.xlsx", clusters_w_coordinates_dict)
